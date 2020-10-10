@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This script is for installing Moodle LMS on LAPP stack (Linux, Apache, PostreSQL, PHP) in CentOS 8. It will also create a database and database user to be used by Moodle. 
+This script is for installing Moodle LMS on LAPP stack (Linux, Apache, PostgreSQL, PHP) in CentOS 8. It will also create a database and database user to be used by Moodle. 
 
 
 ## How To Use
