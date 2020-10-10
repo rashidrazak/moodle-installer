@@ -11,10 +11,13 @@ NC="\033[0m"
 #######################################################
 main() {
     rootCheck
+
+    # Set curent directory
+    CURRENT_DIR=$(pwd)
+
     displayIntro
     readVar
 
-    cd /tmp
 
     installEpel
     updateOs
@@ -78,6 +81,9 @@ updateOs() {
 }
 
 installEssentialPackages() {
+    clear >$(tty)
+    echo -e "\n${GREEN}Installing essential packages...${NC}"
+
     # Install Python 3
     dnf -y install python3
     alternatives --set python "$(which python3)"
@@ -87,6 +93,9 @@ installEssentialPackages() {
 }
 
 installAndConfigureApache() {
+    clear >$(tty)
+    echo -e "\n${GREEN}Installing Apache...${NC}"
+
     # Install Apache
     dnf -y install httpd httpd-tools
     dnf -y install mod_ssl
@@ -106,15 +115,20 @@ installAndConfigureApache() {
 }
 
 installAndConfigurePostgresql() {
+    clear >$(tty)
+    echo -e "\n${GREEN}Installing PostgreSQL 10...${NC}"
+
     # Install PostgreSQL 10
     dnf -y install @postgresql:10
     dnf -y install postgresql-contrib
 
+    postgresql-setup initdb
     systemctl enable postgresql
     systemctl start postgresql
 
     # Backup pg_hba.conf
     cp /var/lib/pgsql/data/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf.bak
+    chown postgres:postgres /var/lib/pgsql/data/pg_hba.conf.bak
 
     # Initialize database
     runuser -l postgres -c "psql -c \"CREATE USER $PGSQL_MOODLE_USER WITH PASSWORD '$PGSQL_MOODLE_USER_PASSWORD';\""
@@ -122,14 +136,23 @@ installAndConfigurePostgresql() {
 
     echo -e "Installed PostgreSQL: \n$(postgres --version)"
 
-    rm /var/lib/pgsql/data/pg_hba.conf
-    mv $(pwd)/config/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf
-    chown postgres:postgres /var/lib/pgsql/data/pg_hba.conf
-    chmod 600 /var/lib/pgsql/data/pg_hba.conf
-    systemctl restart postgresql
+    systemctl stop postgresql
+    cat "$(pwd)"/config/pg_hba.conf > /var/lib/pgsql/data/pg_hba.conf
+    systemctl start postgresql
+
+    # rm /var/lib/pgsql/data/pg_hba.conf
+    # mv $(pwd)/config/pg_hba.conf /var/lib/pgsql/data/pg_hba.conf
+    # chown postgres:postgres /var/lib/pgsql/data/pg_hba.conf
+    # chmod 600 /var/lib/pgsql/data/pg_hba.conf
+    # systemctl restart postgresql
+    sleep 3
 }
 
 installAndConfigurePhp() {
+    clear >$(tty)
+    echo -e "\n${GREEN}Installing PHP 7.2...${NC}"
+
+    # Install PHP
     dnf -y install php \
     php-opcache php-gd php-curl php-mysqlnd php-mbstring \
     php-openssl php-xmlrpc php-soap php-zip php-simplexml \
@@ -137,9 +160,13 @@ installAndConfigurePhp() {
     php-pgsql php-pdo_pgsql
 
     echo -e "Installed PHP: \n$(php --version)"
+    sleep 3
 }
 
 downloadAndInstallMoodle() {
+    clear >$(tty)
+    echo -e "\n${GREEN}Installing Moodle LMS...${NC}"
+
     git clone -b $MOODLE_STABLE_BRANCH git://git.moodle.org/moodle.git
     rsync -avP $(pwd)/moodle/ /var/www/html/
 
@@ -151,7 +178,9 @@ downloadAndInstallMoodle() {
     chcon -t httpd_sys_rw_content_t /opt/moodle/moodledata -R
 
     chown -R apache:apache /var/www/html
-    runuser -l apache -c $(which php) -- /var/www/html/admin/cli/install.php \
+    cd /var/www/html/admin/cli
+
+    runuser -u apache $(which php) install.php -- \
         --chmod="$MOODLE_DIRECTORYPERMISSIONS" \
         --lang="$MOODLE_LANG" \
         --wwwroot="$MOODLE_WWWROOT" \
@@ -168,7 +197,7 @@ downloadAndInstallMoodle() {
         --summary="$MOODLE_SUMMARY" \
         --adminuser="$MOODLE_ADMINUSER" \
         --adminpass="$MOODLE_ADMINPASS" \
-        --adminemail="$MOODLE_ADMINEMAIL"
+        --adminemail="$MOODLE_ADMINEMAIL" \
         --non-interactive \
         --agree-license \
         --allow-unstable
@@ -178,11 +207,13 @@ downloadAndInstallMoodle() {
 
     systemctl restart postgresql
     systemctl restart httpd
+    cd $CURRENT_DIR
+    sleep 3
 }
 
 createSudoUser() {
-    SUDO_USER_ENCRYPTED_PASSWORD=$(perl -e 'print crypt($SUDO_USER_PASSWORD, "password")' $password)
-    useradd -m -p "$SUDO_USER_USERNAME" "$SUDO_USER_ENCRYPTED_PASSWORD"
+    useradd "$SUDO_USER_USERNAME"
+    echo $SUDO_USER_PASSWORD | passwd $SUDO_USER_USERNAME --stdin
     usermod -aG wheel "$SUDO_USER_USERNAME"
 }
 
